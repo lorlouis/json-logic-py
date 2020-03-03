@@ -55,7 +55,6 @@ def less(a, b, *args):
             return False
     return a < b and (not args or less(b, *args))
 
-
 def less_or_equal(a, b, *args):
     """Implements the '<=' operator with JS-style type coertion."""
     return (
@@ -140,6 +139,12 @@ def missing_some(data, min_required, args):
                 return []
     return ret
 
+def substr(data, index, ln=None):
+    substr = data[index:]
+    if ln is not None:
+        return substr[:ln]
+    else:
+        return substr
 
 operations = {
     "==": soft_equals,
@@ -168,6 +173,7 @@ operations = {
     "max": lambda *args: max(args),
     "merge": merge,
     "count": lambda *args: sum(1 if a else 0 for a in args),
+    "substr": substr,
 }
 
 
