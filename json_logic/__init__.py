@@ -97,8 +97,13 @@ def merge(*args):
     return ret
 
 
-def get_var(data, var_name, not_found=None):
+def get_var(data, var_name=None, not_found=None):
     """Gets variable value from data dictionary."""
+    try:
+        if var_name is None or len(var_name) == 0:
+            return 1
+    except TypeError:
+        pass
     try:
         for key in str(var_name).split('.'):
             try:
@@ -146,6 +151,78 @@ def substr(data, index, ln=None):
     else:
         return substr
 
+def map_(values, data):
+    if values is None:
+        return []
+    ret = []
+    op = list(data.keys())[0]
+    for value in values:
+        if op == "var":
+            ret.append(jsonLogic(data, value))
+        else:
+            ret.append(operations[op](value, data[op][1]))
+    return ret
+
+def filter_(values, condition):
+    ret = []
+    for value in values:
+        if type(condition) is type({}):
+            op = list(condition.keys())[0]
+            if operations[op](value, condition[op][1]):
+                ret.append(value)
+        else:
+            if bool(value) is condition:
+                ret.append(value)
+    return ret
+
+def reduce_(values, data):
+    ldata = jsonLogic(values[0], data)
+    llogic = values[1]
+    init = values[2]
+    op = list(llogic.keys())[0]
+    if ldata is None:
+        return init
+    if type(ldata[1]) is type({}):
+        tmp = []
+        for val in ldata:
+            tmp.append(jsonLogic(llogic[op][1], {"current":val}))
+        ldata = tmp
+    for val in ldata:
+        init = jsonLogic({op:[init,val]})
+    return init
+
+def all_(values, data):
+    lcode = values[1]
+    ldata = jsonLogic(values[0], data)
+    if ldata is None:
+        return False
+    if len(ldata) == 0:
+        return False
+    if type(ldata[1]) is type({}):
+        tmp = []
+        for val in ldata:
+            if not jsonLogic(lcode, val):
+                return False
+        return True
+    l2data = filter_(ldata, values[1])
+    return len(ldata) == len(l2data)
+
+def some_(values, data):
+    lcode = values[1]
+    ldata = jsonLogic(values[0], data)
+    if ldata is None:
+        return False
+    if len(ldata) == 0:
+        return False
+    if type(ldata[1]) is type({}):
+        tmp = []
+        for val in ldata:
+            if(jsonLogic(lcode, val)):
+                return True
+        return False
+    l2data = filter_(ldata, values[1])
+    return len(ldata) >= len(l2data) and len(l2data) > 0
+
 operations = {
     "==": soft_equals,
     "===": hard_equals,
@@ -174,6 +251,7 @@ operations = {
     "merge": merge,
     "count": lambda *args: sum(1 if a else 0 for a in args),
     "substr": substr,
+    "reduce": reduce_,
 }
 
 
@@ -192,6 +270,26 @@ def jsonLogic(tests, data=None):
     # {"var": ["x"]}
     if not isinstance(values, list) and not isinstance(values, tuple):
         values = [values]
+
+    if operator == 'filter':
+        values[0] = jsonLogic(values[0], data)
+        return filter_(values[0], values[1])
+
+    if operator == 'map':
+        values[0] = jsonLogic(values[0], data)
+        return map_(values[0], values[1])
+
+    if operator == 'reduce':
+        return reduce_(values, data)
+
+    if operator == 'all':
+        return all_(values, data)
+
+    if operator == 'some':
+        return some_(values, data)
+
+    if operator == 'none':
+        return not some_(values, data)
 
     # Recursion!
     values = [jsonLogic(val, data) for val in values]
